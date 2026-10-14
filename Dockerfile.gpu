@@ -1,0 +1,23 @@
+# aadi-runtime:gpu — everything the video stage needs on a rented GPU: pipeline tools + InfiniteTalk code and
+# Python packages (versions tested 2026-10-14). NO model weights (downloaded fresh each run, ~1 min) and no keys.
+FROM pytorch/pytorch:2.4.1-cuda12.1-cudnn9-devel
+ENV DEBIAN_FRONTEND=noninteractive PIP_NO_CACHE_DIR=1 AADI_IT_DIR=/opt/it
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ffmpeg curl ca-certificates unzip git \
+      libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
+      libxfixes3 libxrandr2 libgbm1 libasound2 libpango-1.0-0 libcairo2 \
+ && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs \
+ && curl -s https://rclone.org/install.sh | bash \
+ && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 https://github.com/MeiGen-AI/InfiniteTalk /opt/it \
+ && sed -i "s/^from inspect import ArgSpec/# &/" /opt/it/wan/multitalk.py \
+ && pip install -U xformers==0.0.28 --index-url https://download.pytorch.org/whl/cu121 \
+ && pip install "https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.4cxx11abiFALSE-cp311-cp311-linux_x86_64.whl" \
+ && pip install "misaki[en]" ninja psutil packaging wheel librosa soundfile \
+ && pip install -r /opt/it/requirements.txt \
+ && pip install "diffusers==0.33.1" "transformers==4.51.3" "peft==0.13.2" "xfuser==0.4.1" "huggingface_hub>=0.34,<1.0" \
+      faster-whisper numpy pillow \
+ && python -c "import torch,flash_attn,xformers,diffusers;print(torch.__version__,flash_attn.__version__,diffusers.__version__)"
+COPY remotion-package.json /opt/remotion/package.json
+RUN cd /opt/remotion && npm install --no-audit --no-fund && npx remotion browser ensure
+RUN ln -sf "$(command -v python)" /usr/local/bin/aadipy && touch /opt/aadi_runtime_ready /opt/it_ready
